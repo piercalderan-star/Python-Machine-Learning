@@ -1,0 +1,8 @@
+frase,intent
+Ciao,saluto
+Buongiorno,saluto
+Come posso contattare l'assistenza?,supporto
+Ho un problema con il prodotto,supporto
+Quanto costa il corso di machine learning?,prezzo
+Quali moduli include il corso?,info_corso
+Come faccio a iscrivermi al corso?,iscrizione

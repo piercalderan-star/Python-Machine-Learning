@@ -1,0 +1,25 @@
+"Secondo il testo, perché Python è consigliato come primo linguaggio di programmazione?",Perché ha la fama di essere un linguaggio semplice da imparare.
+"Quale paradigma di programmazione supporta Python, menzionato nella presentazione?",Supporta la programmazione ad oggetti.
+"Per quale tipo di utente, dal principiante all'esperto, è adatto Python?",Python è un linguaggio adatto sia a principianti che a esperti.
+Come viene classificato il livello del linguaggio di programmazione Python?,È classificato come un linguaggio di programmazione ad alto livello.
+Su quali piattaforme è necessario installare Python manualmente?,"È necessario installarlo sulle piattaforme Windows, mentre è nativo su Mac e Linux."
+In che anno Python fu rilasciato pubblicamente per la prima volta?,Fu rilasciato pubblicamente per la prima volta nel 1991.
+Chi è il creatore del linguaggio di programmazione Python?,Il suo creatore è Guido van Rossum.
+Da cosa deriva il nome del linguaggio di programmazione Python?,"Deriva dalla commedia inglese Monty Python’s Flying Circus, di cui il creatore era un grande appassionato."
+"Quale dispositivo hardware ha abbracciato Python come suo nucleo di programmazione principale, aumentandone la popolarità?",Il dispositivo è il Raspberry Pi.
+Quale organizzazione no-profit gestisce lo sviluppo di Python?,L'organizzazione è la Python Software Foundation.
+Python è definito un linguaggio _____: un interprete analizza il codice sorgente ma è possibile anche una fase di compilazione.,pseudocompilato
+Con quale estensione vengono salvati i file di testo contenenti il codice sorgente Python?,Vengono salvati con l'estensione .py.
+Cosa rende Python un linguaggio portabile su qualsiasi piattaforma?,"Il fatto di essere pseudo-interpretato lo rende portabile, a patto che sia installato l'interprete corretto."
+Qual è il modello di licenza e distribuzione di Python?,"Python è un software libero, completamente gratuito e distribuito con una licenza open source."
+"Quale libreria Python viene citata per la creazione di giochi, dai più semplici ai più complessi?",La libreria citata per creare giochi è PyGame.
+Quale libreria Python è menzionata per la creazione di algoritmi complessi di computer vision?,La libreria menzionata è OpenCv.
+Quale applicazione di computer vision con OpenCV riguarda l'identificazione di veicoli?,Il riconoscimento delle targhe automobilistiche.
+"Oltre al rilevamento di oggetti, quale altra capacità legata alle persone viene menzionata per OpenCV?",Il riconoscimento facciale e il riconoscimento delle mascherine facciali.
+"In quali campi dell'intelligenza artificiale viene utilizzato Python, secondo il testo?",Viene utilizzato per creare reti neurali per il deep learning e il machine learning.
+Cosa è possibile creare con le diverse librerie grafiche di Python per applicazioni desktop?,"Si possono creare GUI (Interfacce Utente Grafiche), anche per dispositivi touch."
+"Oltre alle GUI e alla computer vision, quali altri tre campi di applicazione di Python vengono elencati?","Webserver, script di automazione e protocolli di trasmissione dati/comunicazione."
+Qual è il principale vantaggio della semplicità di Python nello sviluppo di un progetto?,Rende lo sviluppo di un progetto molto più veloce e piacevole.
+"Su quali piattaforme Python è considerato nativo, cioè già presente nel sistema operativo?",Python è nativo sulle piattaforme Mac e su tutte le distribuzioni Linux.
+Cosa analizza l'interprete Python per eseguire un programma?,"L'interprete analizza il codice sorgente, formato da semplici file di testo."
+La licenza open source di Python cosa consente di fare con il software?,Consente di modificare e ridistribuire liberamente il software.
