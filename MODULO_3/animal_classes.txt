@@ -1,0 +1,4 @@
+cani
+cavalli
+gatti
+uccelli
