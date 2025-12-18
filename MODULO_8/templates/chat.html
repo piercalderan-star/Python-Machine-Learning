@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini ChatGPT Flask + RAG + Voice</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>Conversazioni</h2>
+            <button id="new-chat-btn">+ Nuova</button>
+        </div>
+        <div id="conv-list" class="conv-list">
+            <!-- Lista conversazioni -->
+        </div>
+    </aside>
+
+    <!-- MAIN APP -->
+    <div class="app-container">
+        <header class="app-header">
+            <div>
+                <h1>Mini ChatGPT Flask</h1>
+                <p>Chat con OpenAI (gpt-4o-mini) + RAG FAQ/Manuale/Upload + Voice</p>
+            </div>
+            <div class="rag-toggle">
+                <label>
+                    <input type="checkbox" id="rag-checkbox">
+                    Usa RAG (FAQ / manuale / upload)
+                </label>
+            </div>
+        </header>
+
+        <!-- TOOLBAR: upload file per RAG -->
+        <div class="toolbar">
+            <label class="file-label">
+                Carica corpus (.txt / .md)
+                <input type="file" id="corpus-file" accept=".txt,.md">
+            </label>
+            <button id="upload-corpus-btn" class="small-btn">
+                Aggiorna RAG
+            </button>
+            <span id="upload-status" class="upload-status"></span>
+        </div>
+
+        <main class="chat-container">
+            <div id="chat-history" class="chat-history">
+                <!-- Messaggi -->
+            </div>
+        </main>
+
+        <footer class="chat-input-area">
+            <button id="mic-btn" class="icon-btn" title="Parla (voice chat)">??</button>
+            <textarea id="user-input" placeholder="Scrivi un messaggio..." rows="2"></textarea>
+            <button id="send-btn">Invia</button>
+        </footer>
+    </div>
+</div>
+
+<script>
+    const chatHistoryEl = document.getElementById("chat-history");
+    const userInputEl = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+    const convListEl = document.getElementById("conv-list");
+    const newChatBtn = document.getElementById("new-chat-btn");
+    const ragCheckbox = document.getElementById("rag-checkbox");
+    const micBtn = document.getElementById("mic-btn");
+
+    const corpusFileInput = document.getElementById("corpus-file");
+    const uploadCorpusBtn = document.getElementById("upload-corpus-btn");
+    const uploadStatus = document.getElementById("upload-status");
+
+    // Stato corrente
+    let messages = [];          // history corrente [{role, content}, ...]
+    let currentConversationId = null;
+
+    function addMessageToUI(role, text) {
+        const msgEl = document.createElement("div");
+        msgEl.classList.add("message", role === "user" ? "user" : "assistant");
+
+        const bubble = document.createElement("div");
+        bubble.classList.add("bubble");
+        bubble.textContent = text;
+
+        msgEl.appendChild(bubble);
+        chatHistoryEl.appendChild(msgEl);
+        chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+    }
+
+    function addAudioMessageToUI(audioUrl) {
+        const msgEl = document.createElement("div");
+        msgEl.classList.add("message", "assistant");
+
+        const bubble = document.createElement("div");
+        bubble.classList.add("bubble");
+
+        const audioEl = document.createElement("audio");
+        audioEl.controls = true;
+        audioEl.src = audioUrl;
+        audioEl.classList.add("tts-audio");
+
+        bubble.appendChild(audioEl);
+        msgEl.appendChild(bubble);
+
+        chatHistoryEl.appendChild(msgEl);
+        chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+    }
+
+    function clearChatUI() {
+        chatHistoryEl.innerHTML = "";
+    }
+
+    async function loadConversations() {
+        convListEl.innerHTML = "";
+        try {
+            const res = await fetch("/api/conversations");
+            const data = await res.json();
+            if (!Array.isArray(data)) return;
+
+            data.forEach(conv => {
+                const item = document.createElement("div");
+                item.classList.add("conv-item");
+                item.dataset.id = conv.id;
+
+                const title = document.createElement("div");
+                title.classList.add("conv-title");
+                title.textContent = conv.title || `Conversazione ${conv.id}`;
+
+                const meta = document.createElement("div");
+                meta.classList.add("conv-meta");
+                meta.textContent = conv.created_at || "";
+
+                item.appendChild(title);
+                item.appendChild(meta);
+
+                item.addEventListener("click", () => {
+                    openConversation(conv.id);
+                });
+
+                convListEl.appendChild(item);
+            });
+        } catch (e) {
+            console.error("Errore loadConversations:", e);
+        }
+    }
+
+    async function openConversation(convId) {
+        try {
+            const res = await fetch(`/api/conversations/${convId}`);
+            const data = await res.json();
+            if (data.error) {
+                console.error(data.error);
+                return;
+            }
+
+            currentConversationId = data.id;
+            messages = [];
+
+            clearChatUI();
+            data.messages.forEach(m => {
+                addMessageToUI(m.role, m.content);
+                messages.push({role: m.role, content: m.content});
+            });
+        } catch (e) {
+            console.error("Errore openConversation:", e);
+        }
+    }
+
+    async function sendMessage() {
+        const text = userInputEl.value.trim();
+        if (!text) return;
+
+        // aggiorniamo UI e stato locale
+        addMessageToUI("user", text);
+        messages.push({role: "user", content: text});
+
+        userInputEl.value = "";
+        userInputEl.disabled = true;
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Attendere...";
+
+        const useRag = ragCheckbox.checked;
+
+        // inviamo la history SENZA l'ultimo messaggio (lo ricostruisce il server)
+        const historyToSend = messages.slice(0, -1);
+
+        try {
+            const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    message: text,
+                    messages: historyToSend,
+                    conversation_id: currentConversationId,
+                    use_rag: useRag
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.error) {
+                addMessageToUI("assistant", "Errore dal server: " + data.error);
+            } else {
+                const reply = data.reply || "";
+                addMessageToUI("assistant", reply);
+                messages.push({role: "assistant", content: reply});
+
+                if (!currentConversationId && data.conversation_id) {
+                    currentConversationId = data.conversation_id;
+                    loadConversations();
+                }
+            }
+        } catch (err) {
+            addMessageToUI("assistant", "Errore di rete: " + err);
+        } finally {
+            userInputEl.disabled = false;
+            sendBtn.disabled = false;
+            sendBtn.textContent = "Invia";
+            userInputEl.focus();
+        }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    userInputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    newChatBtn.addEventListener("click", () => {
+        currentConversationId = null;
+        messages = [];
+        clearChatUI();
+        addMessageToUI("assistant", "Nuova conversazione creata. Come posso aiutarti?");
+        messages.push({role: "assistant", content: "Nuova conversazione creata. Come posso aiutarti?"});
+        userInputEl.focus();
+    });
+
+    // --- Upload corpus per RAG dinamico ---
+
+    uploadCorpusBtn.addEventListener("click", async () => {
+        const file = corpusFileInput.files[0];
+        if (!file) {
+            uploadStatus.textContent = "Seleziona un file .txt o .md";
+            uploadStatus.classList.add("error");
+            return;
+        }
+
+        uploadStatus.textContent = "Carico e indicizzo...";
+        uploadStatus.classList.remove("error");
+        uploadStatus.classList.remove("success");
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await fetch("/api/upload_corpus", {
+                method: "POST",
+                body: formData
+            });
+            const data = await res.json();
+            if (data.error) {
+                uploadStatus.textContent = "Errore: " + data.error;
+                uploadStatus.classList.add("error");
+            } else {
+                uploadStatus.textContent = "RAG aggiornato (" + data.chunks + " chunk).";
+                uploadStatus.classList.add("success");
+            }
+        } catch (e) {
+            uploadStatus.textContent = "Errore di rete: " + e;
+            uploadStatus.classList.add("error");
+        }
+    });
+
+    // --- Voice chat (Web Audio + /api/voice_chat) ---
+
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+
+    async function toggleRecording() {
+        if (!isRecording) {
+            // start recording
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: "audio/webm" });
+                    stream.getTracks().forEach(t => t.stop());
+                    await sendVoiceMessage(blob);
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                micBtn.classList.add("recording");
+                micBtn.textContent = "?";
+            } catch (e) {
+                console.error(e);
+                alert("Impossibile accedere al microfono.");
+            }
+        } else {
+            // stop recording
+            mediaRecorder.stop();
+            isRecording = false;
+            micBtn.classList.remove("recording");
+            micBtn.textContent = "??";
+        }
+    }
+
+    micBtn.addEventListener("click", toggleRecording);
+
+    async function sendVoiceMessage(blob) {
+        const useRag = ragCheckbox.checked;
+
+        // inviamo la history completa (senza il nuovo messaggio vocale)
+        const historyToSend = JSON.stringify(messages);
+
+        const formData = new FormData();
+        formData.append("audio", blob, "recording.webm");
+        formData.append("conversation_id", currentConversationId || "");
+        formData.append("use_rag", useRag ? "1" : "0");
+        formData.append("messages", historyToSend);
+
+        addMessageToUI("assistant", "Sto elaborando il tuo messaggio vocale...");
+
+        try {
+            const res = await fetch("/api/voice_chat", {
+                method: "POST",
+                body: formData
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                addMessageToUI("assistant", "Errore voce: " + data.error);
+            } else {
+                // rimuoviamo l'ultimo messaggio "elaborando..."
+                const msgs = chatHistoryEl.querySelectorAll(".message");
+                if (msgs.length > 0) {
+                    chatHistoryEl.removeChild(msgs[msgs.length - 1]);
+                }
+
+                if (data.transcript) {
+                    addMessageToUI("user", data.transcript);
+                    messages.push({role: "user", content: data.transcript});
+                }
+                if (data.reply) {
+                    addMessageToUI("assistant", data.reply);
+                    messages.push({role: "assistant", content: data.reply});
+                }
+                if (data.audio_url) {
+                    addAudioMessageToUI(data.audio_url);
+                }
+                if (!currentConversationId && data.conversation_id) {
+                    currentConversationId = data.conversation_id;
+                    loadConversations();
+                }
+            }
+        } catch (e) {
+            addMessageToUI("assistant", "Errore di rete voce: " + e);
+        }
+    }
+
+    // --- INIT ---
+
+    window.addEventListener("load", () => {
+        addMessageToUI("assistant", "Ciao! Sono il tuo mini assistente AI. Se vuoi, attiva 'Usa RAG' per usare FAQ, manuale o un file che carichi tu. Puoi anche parlare con il microfono.");
+        messages.push({role: "assistant", content: "Ciao! Sono il tuo mini assistente AI. Se vuoi, attiva 'Usa RAG' per usare FAQ, manuale o un file che carichi tu. Puoi anche parlare con il microfono."});
+        loadConversations();
+        userInputEl.focus();
+    });
+</script>
+</body>
+</html>

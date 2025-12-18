@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini ChatGPT Flask + RAG</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>Conversazioni</h2>
+            <button id="new-chat-btn">+ Nuova</button>
+        </div>
+        <div id="conv-list" class="conv-list">
+            <!-- Lista conversazioni -->
+        </div>
+    </aside>
+
+    <!-- MAIN APP -->
+    <div class="app-container">
+        <header class="app-header">
+            <div>
+                <h1>Mini ChatGPT Flask</h1>
+                <p>Chat con OpenAI (gpt-4o-mini) + RAG FAQ/Manuale</p>
+            </div>
+            <div class="rag-toggle">
+                <label>
+                    <input type="checkbox" id="rag-checkbox">
+                    Usa RAG (FAQ / manuale)
+                </label>
+            </div>
+        </header>
+
+        <main class="chat-container">
+            <div id="chat-history" class="chat-history">
+                <!-- Messaggi -->
+            </div>
+        </main>
+
+        <footer class="chat-input-area">
+            <textarea id="user-input" placeholder="Scrivi un messaggio..." rows="2"></textarea>
+            <button id="send-btn">Invia</button>
+        </footer>
+    </div>
+</div>
+
+<script>
+    const chatHistoryEl = document.getElementById("chat-history");
+    const userInputEl = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+    const convListEl = document.getElementById("conv-list");
+    const newChatBtn = document.getElementById("new-chat-btn");
+    const ragCheckbox = document.getElementById("rag-checkbox");
+
+    // Stato corrente
+    let messages = [];          // history corrente [{role, content}, ...]
+    let currentConversationId = null;
+
+    function addMessageToUI(role, text) {
+        const msgEl = document.createElement("div");
+        msgEl.classList.add("message", role === "user" ? "user" : "assistant");
+
+        const bubble = document.createElement("div");
+        bubble.classList.add("bubble");
+        bubble.textContent = text;
+
+        msgEl.appendChild(bubble);
+        chatHistoryEl.appendChild(msgEl);
+        chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+    }
+
+    function clearChatUI() {
+        chatHistoryEl.innerHTML = "";
+    }
+
+    async function loadConversations() {
+        convListEl.innerHTML = "";
+        try {
+            const res = await fetch("/api/conversations");
+            const data = await res.json();
+            if (!Array.isArray(data)) return;
+
+            data.forEach(conv => {
+                const item = document.createElement("div");
+                item.classList.add("conv-item");
+                item.dataset.id = conv.id;
+
+                const title = document.createElement("div");
+                title.classList.add("conv-title");
+                title.textContent = conv.title || `Conversazione ${conv.id}`;
+
+                const meta = document.createElement("div");
+                meta.classList.add("conv-meta");
+                meta.textContent = conv.created_at || "";
+
+                item.appendChild(title);
+                item.appendChild(meta);
+
+                item.addEventListener("click", () => {
+                    openConversation(conv.id);
+                });
+
+                convListEl.appendChild(item);
+            });
+        } catch (e) {
+            console.error("Errore loadConversations:", e);
+        }
+    }
+
+    async function openConversation(convId) {
+        try {
+            const res = await fetch(`/api/conversations/${convId}`);
+            const data = await res.json();
+            if (data.error) {
+                console.error(data.error);
+                return;
+            }
+
+            currentConversationId = data.id;
+            messages = [];
+
+            clearChatUI();
+            data.messages.forEach(m => {
+                addMessageToUI(m.role, m.content);
+                messages.push({role: m.role, content: m.content});
+            });
+        } catch (e) {
+            console.error("Errore openConversation:", e);
+        }
+    }
+
+    async function createNewConversation(firstMessageText) {
+        const title = firstMessageText
+            ? firstMessageText.slice(0, 40) + (firstMessageText.length > 40 ? "..." : "")
+            : "Nuova conversazione";
+
+        const res = await fetch("/api/conversations", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({title})
+        });
+        const data = await res.json();
+        return data.id;
+    }
+
+    async function sendMessage() {
+        const text = userInputEl.value.trim();
+        if (!text) return;
+
+        
+        // prepararci a gestirlo in risposta
+        addMessageToUI("user", text);
+        messages.push({role: "user", content: text});
+
+        userInputEl.value = "";
+        userInputEl.disabled = true;
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Attendere...";
+
+        const useRag = ragCheckbox.checked;
+
+        try {
+            const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    message: text,
+                    messages: messages,
+                    conversation_id: currentConversationId,
+                    use_rag: useRag
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.error) {
+                addMessageToUI("assistant", "Errore dal server: " + data.error);
+            } else {
+                const reply = data.reply || "";
+                addMessageToUI("assistant", reply);
+                messages.push({role: "assistant", content: reply});
+
+                // backend potrebbe aver creato una nuova conversazione
+                if (!currentConversationId && data.conversation_id) {
+                    currentConversationId = data.conversation_id;
+                    // ricarichiamo la lista conversazioni
+                    loadConversations();
+                }
+            }
+        } catch (err) {
+            addMessageToUI("assistant", "Errore di rete: " + err);
+        } finally {
+            userInputEl.disabled = false;
+            sendBtn.disabled = false;
+            sendBtn.textContent = "Invia";
+            userInputEl.focus();
+        }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    userInputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    newChatBtn.addEventListener("click", () => {
+        // Resettiamo solo la UI e lo stato corrente;
+        
+        currentConversationId = null;
+        messages = [];
+        clearChatUI();
+        addMessageToUI("assistant", "Nuova conversazione creata. Come posso aiutarti?");
+        userInputEl.focus();
+    });
+
+    window.addEventListener("load", () => {
+        // Messaggio iniziale
+        addMessageToUI("assistant", "Ciao! Sono il tuo mini assistente AI. Se vuoi, attiva 'Usa RAG' per usare FAQ e manuale.");
+        loadConversations();
+        userInputEl.focus();
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!-- templates/chat.html -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini ChatGPT Flask</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app-container">
+    <header class="app-header">
+        <h1>Mini ChatGPT Flask</h1>
+        <p>Chat con OpenAI (gpt-4o-mini)</p>
+    </header>
+
+    <main class="chat-container">
+        <div id="chat-history" class="chat-history">
+            <!-- Messaggi chat -->
+        </div>
+    </main>
+
+    <footer class="chat-input-area">
+        <textarea id="user-input" placeholder="Scrivi un messaggio..." rows="2"></textarea>
+        <button id="send-btn">Invia</button>
+    </footer>
+</div>
+
+<script>
+    const chatHistoryEl = document.getElementById("chat-history");
+    const userInputEl = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+
+    // Storia conversazione (solo user/assistant; il system lo aggiunge il backend)
+    let messages = [];
+
+    function addMessageToUI(role, text) {
+        const msgEl = document.createElement("div");
+        msgEl.classList.add("message", role === "user" ? "user" : "assistant");
+
+        const bubble = document.createElement("div");
+        bubble.classList.add("bubble");
+
+        // Piccola sanitizzazione base
+        bubble.textContent = text;
+
+        msgEl.appendChild(bubble);
+        chatHistoryEl.appendChild(msgEl);
+        chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+    }
+
+    async function sendMessage() {
+        const text = userInputEl.value.trim();
+        if (!text) return;
+
+        // Aggiungi messaggio utente alla UI e alla history
+        addMessageToUI("user", text);
+        messages.push({role: "user", content: text});
+        userInputEl.value = "";
+        userInputEl.disabled = true;
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Attendere...";
+
+        try {
+            const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    message: text,
+                    messages: messages  // inviamo tutta la history
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.error) {
+                addMessageToUI("assistant", "Errore dal server: " + data.error);
+            } else {
+                const reply = data.reply || "";
+                addMessageToUI("assistant", reply);
+                messages.push({role: "assistant", content: reply});
+            }
+        } catch (err) {
+            addMessageToUI("assistant", "Errore di rete: " + err);
+        } finally {
+            userInputEl.disabled = false;
+            sendBtn.disabled = false;
+            sendBtn.textContent = "Invia";
+            userInputEl.focus();
+        }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+
+    userInputEl.addEventListener("keydown", (e) => {
+        // Invio con Enter (senza Shift)
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // Messaggio di benvenuto
+    window.addEventListener("load", () => {
+        addMessageToUI("assistant", "Ciao! Sono il tuo mini assistente AI. Come posso aiutarti oggi?");
+        userInputEl.focus();
+    });
+</script>
+</body>
+</html>

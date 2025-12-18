@@ -1,0 +1,7 @@
+Arduino UNO 
+Il modulo ESP32
+Alimentazione elettrica
+Core
+Installazione
+Editor Web Arduino
+Renesas RA4M1
