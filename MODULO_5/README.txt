@@ -1,0 +1,1 @@
+clonare da Hugging Face microsoft/resnet-18
