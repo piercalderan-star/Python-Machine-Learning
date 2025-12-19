@@ -1,0 +1,7 @@
+'''
+https://jupyter.org
+
+per test online:
+https://jupyter.org/try
+
+'''
